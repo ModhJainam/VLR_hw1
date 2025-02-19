@@ -1,7 +1,7 @@
 import os
 import random
 
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 import torch
 import torchvision
 from torchvision.datasets import CIFAR10

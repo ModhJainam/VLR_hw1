@@ -22,9 +22,9 @@ def save_model(epoch, model_name, model):
     torch.save(model, filename)
 
 def multi_label_loss(output, target, wgt):
-    epsilon = 1e-5
+    epsilon = 1e-7
 
-    output = torch.clamp(output, min=-50, max=50)
+    output = torch.clamp(output, min=-80, max=80)
 
     output = torch.sigmoid(output)
     output = torch.clamp(output, min=epsilon, max=1-epsilon)
