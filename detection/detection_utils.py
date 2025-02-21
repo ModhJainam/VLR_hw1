@@ -140,7 +140,20 @@ def fcos_get_deltas_from_locations(
     # Set this to Tensor of shape (N, 4) giving deltas (left, top, right, bottom)
     # from the locations to GT box edges, normalized by FPN stride.
     deltas = None
-    pass
+    xc, yc = locations.unbind(dim=1)
+    x0, y0, x1, y1 = gt_boxes[:, :4].unbind(dim=1)
+
+    left = (xc - x0) / stride
+    top = (yc - y0) / stride
+    right = (x1 - xc) / stride
+    bottom = (y1 - yc) / stride
+
+    
+    deltas = torch.stack([left, top, right, bottom], dim=1)
+
+    # Set deltas to (-1, -1, -1, -1) for background boxes.
+    mask = (gt_boxes  == -1).all(dim=1)
+    deltas[mask] = -1
     ##########################################################################
     #                             END OF YOUR CODE                           #
     ##########################################################################
@@ -182,7 +195,17 @@ def fcos_apply_deltas_to_locations(
     # box. Make sure to clip them to zero.                                   #
     ##########################################################################
     output_boxes = None
+    xc, yc = locations.unbind(dim=1)
+    
+    deltas = torch.clamp(deltas, min=0)
 
+    left, top, right, bottom = deltas.unbind(dim=1)
+    x0 = xc - left * stride
+    y0 = yc - top * stride
+    x1 = xc + right * stride
+    y1 = yc + bottom * stride
+
+    output_boxes = torch.stack([x0, y0, x1, y1], dim=1)
     ##########################################################################
     #                             END OF YOUR CODE                           #
     ##########################################################################
@@ -205,7 +228,7 @@ def fcos_make_centerness_targets(deltas: torch.Tensor):
 
     Returns:
         torch.Tensor
-            Tensor of shape `(N, )` giving centerness regression targets.
+            Tensor of shape `(N, )` giving centernxess regression targets.
     """
     ##########################################################################
     # TODO: Implement the centerness calculation logic.                      #
@@ -216,6 +239,15 @@ def fcos_make_centerness_targets(deltas: torch.Tensor):
     # )
     ##########################################################################
     centerness = None
+    left, top, right, bottom = torch.abs(deltas).unbind(dim=1)
+    centerness = torch.sqrt(
+        (torch.min(left, right) * torch.min(top, bottom))
+        / (torch.max(left, right) * torch.max(top, bottom))
+    )
+
+    # Set centerness to -1 for background boxes.
+    mask = (deltas == -1).all(dim=1)
+    centerness[mask] = -1
     ##########################################################################
     #                             END OF YOUR CODE                           #
     ##########################################################################
@@ -263,9 +295,9 @@ def get_fpn_location_coords(
         xs = torch.arange(W, device=device, dtype=dtype)
         ys = torch.arange(H, device=device, dtype=dtype)
         x_grid, y_grid = torch.meshgrid(xs, ys)
+
         xc = (x_grid + 0.5) * level_stride
         yc = (y_grid + 0.5) * level_stride
-
         location_coords[level_name] = torch.stack((xc.flatten(), yc.flatten()), dim=1)
         ######################################################################
         #                             END OF YOUR CODE                       #
