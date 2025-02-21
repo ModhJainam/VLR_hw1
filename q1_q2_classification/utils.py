@@ -80,13 +80,6 @@ def get_data_loader(name='voc', train=True, batch_size=64, split='train', inp_si
         shuffle=train,
         num_workers=4,
     )
-
-    # loader = DataLoader(
-    #     dataset,
-    #     batch_size=1,
-    #     shuffle=True,
-    #     num_workers=0
-    # )
     return loader
 
 

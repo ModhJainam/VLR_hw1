@@ -68,18 +68,18 @@ class VOCDataset(Dataset):
             #  The class vector should be a 20-dimensional vector with class[i] = 1 if an object of class i is present in the image and 0 otherwise
             class_vec = torch.zeros(20)
 
-            for object in tree.iter('object'):
-                name = object.find('name').text
-                class_vec[self.get_class_index(name)] = 1
+            for obj in tree.findall('object'):
+                name = obj.find('name').text
+                class_vec[VOCDataset.get_class_index(name)] = 1
 
             # The weight vector should be a 20-dimensional vector with weight[i] = 0 iff an object of class i has the `difficult` attribute set to 1 in the XML file and 1 otherwise
             # The difficult attribute specifies whether a class is ambiguous and by setting its weight to zero it does not contribute to the loss during training 
             weight_vec = torch.ones(20)
 
-            for object in tree.iter('object'):
-                if object.find('difficult').text == '1':
-                    name = object.find('name').text
-                    weight_vec[self.get_class_index(name)] = 0
+            for obj in tree.findall('object'):
+                name = obj.find('name').text
+                if int(obj.find('difficult').text) == 1:
+                    weight_vec[VOCDataset.get_class_index(name)] = 0
 
             ######################################################################
             #                            END OF YOUR CODE                        #
@@ -102,18 +102,13 @@ class VOCDataset(Dataset):
         # in line 46 in simple_cnn.py
         ######################################################################
         if self.split == 'test':
-            augmentations = [
-                transforms.CenterCrop(self.size)
-            ]
+            return [transforms.CenterCrop(self.size)]
         else:
-            augmentations = [
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(15),
-            transforms.RandomResizedCrop(self.size, scale=(0.8, 1.0)),
-            transforms.RandomInvert(),
+            return [
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomRotation(10),
+                transforms.RandomResizedCrop(self.size, scale=(0.8, 1.0)),
             ]
-
-        return augmentations
         ######################################################################
         #                            END OF YOUR CODE                        #
         ######################################################################
@@ -135,7 +130,7 @@ class VOCDataset(Dataset):
             transforms.Resize((self.size, self.size)),
             *self.get_random_augmentations(),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.457, 0.407], std=[0.5, 0.5, 0.5])
+            transforms.Normalize(mean=[0.485, 0.457, 0.407], std=[0.5, 0.5, 0.5]),
         ])
 
         img = trans(img)

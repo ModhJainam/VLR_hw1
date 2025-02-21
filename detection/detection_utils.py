@@ -258,7 +258,15 @@ def get_fpn_location_coords(
         ##################################################################–####
         # TODO: Implement logic to get location co-ordinates below.          #
         ######################################################################
-        pass
+        B, C, H, W = feat_shape
+
+        xs = torch.arange(W, device=device, dtype=dtype)
+        ys = torch.arange(H, device=device, dtype=dtype)
+        x_grid, y_grid = torch.meshgrid(xs, ys)
+        xc = (x_grid + 0.5) * level_stride
+        yc = (y_grid + 0.5) * level_stride
+
+        location_coords[level_name] = torch.stack((xc.flatten(), yc.flatten()), dim=1)
         ######################################################################
         #                             END OF YOUR CODE                       #
         ######################################################################

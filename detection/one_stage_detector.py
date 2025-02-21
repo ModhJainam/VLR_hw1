@@ -78,6 +78,14 @@ class DetectorBackboneWithFPN(nn.Module):
         # there are trainable weights inside it.
         # Add THREE lateral 1x1 conv and THREE output 3x3 conv layers.
         self.fpn_params = nn.ModuleDict()
+        for level_name, feature_shape in dummy_out_shapes:
+            in_channels = feature_shape[1]
+            lateral_conv = nn.Conv2d(in_channels, self.out_channels, kernel_size=1, stride=1, padding=0)
+            output_conv = nn.Conv2d(self.out_channels, self.out_channels, kernel_size=3, stride=1, padding=1)
+
+            self.fpn_params[level_name + "_lateral"] = lateral_conv
+            self.fpn_params[level_name + "_output"] = output_conv
+        
         ######################################################################
         #                            END OF YOUR CODE                        #
         ######################################################################
@@ -102,8 +110,16 @@ class DetectorBackboneWithFPN(nn.Module):
         # (c3, c4, c5) and FPN conv layers created above.                    #
         # HINT: Use `F.interpolate` to upsample FPN features.                #
         ######################################################################
+        for level_name, feature in backbone_feats.items():
+            lateral_feat = self.fpn_params[level_name + "_lateral"](feature)
+            output_feat = self.fpn_params[level_name + "_output"](lateral_feat)
 
-        pass
+            if level_name == "c3":
+                fpn_feats["p3"] = output_feat
+            elif level_name == "c4":
+                fpn_feats["p4"] = F.interpolate(output_feat, scale_factor=2)
+            elif level_name == "c5":
+                fpn_feats["p5"] = F.interpolate(output_feat, scale_factor=4)
         ######################################################################
         #                            END OF YOUR CODE                        #
         ######################################################################
@@ -150,10 +166,21 @@ class FCOSPredictionNetwork(nn.Module):
         # at every location in feature map, we shouldn't "lose" any locations.
         ######################################################################
         # Fill these.
-        stem_cls = []
-        stem_box = []
+        stem_cls = [
+            nn.Conv2d(in_channels, stem_channels[0], kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+        ]
+        stem_box = [
+            nn.Conv2d(in_channels, stem_channels[0], kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+        ]
         # Replace "pass" statement with your code
-        pass
+        for i in range(1, len(stem_channels)):
+            stem_cls.append(nn.Conv2d(stem_channels[i-1], stem_channels[i], kernel_size=3, stride=1, padding=1))
+            stem_cls.append(nn.ReLU())
+
+            stem_box.append(nn.Conv2d(stem_channels[i-1], stem_channels[i], kernel_size=3, stride=1, padding=1))
+            stem_box.append(nn.ReLU())
 
         # Wrap the layers defined by student into a `nn.Sequential` module:
         self.stem_cls = nn.Sequential(*stem_cls)
@@ -175,9 +202,9 @@ class FCOSPredictionNetwork(nn.Module):
         ######################################################################
 
         # Replace these lines with your code, keep variable names unchanged.
-        self.pred_cls = None  # Class prediction conv
-        self.pred_box = None  # Box regression conv
-        self.pred_ctr = None  # Centerness conv
+        self.pred_cls = nn.Conv2d(stem_channels[-1], num_classes, kernel_size=3, stride=1, padding=1)  # Class prediction conv
+        self.pred_box = nn.Conv2d(stem_channels[-1], 4, kernel_size=3, stride=1, padding=1)  # Box regression conv
+        self.pred_ctr = nn.Conv2d(stem_channels[-1], 1, kernel_size=3, stride=1, padding=1)  # Centerness conv
 
         ######################################################################
         #                           END OF YOUR CODE                         #
@@ -224,6 +251,14 @@ class FCOSPredictionNetwork(nn.Module):
         class_logits = {}
         boxreg_deltas = {}
         centerness_logits = {}
+
+        for level_name, feature in feats_per_fpn_level.items():
+            cls_feats = self.stem_cls(feature)
+            box_feats = self.stem_box(feature)
+
+            class_logits[level_name] = self.pred_cls(cls_feats)
+            boxreg_deltas[level_name] = self.pred_box(box_feats)
+            centerness_logits[level_name] = self.pred_ctr(box_feats)
         ######################################################################
         #                           END OF YOUR CODE                         #
         ######################################################################

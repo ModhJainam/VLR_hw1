@@ -24,15 +24,13 @@ def save_model(epoch, model_name, model):
 def multi_label_loss(output, target, wgt):
     epsilon = 1e-7
 
-    output = torch.clamp(output, min=-80, max=80)
+    probs = torch.sigmoid(output)
 
-    output = torch.sigmoid(output)
-    output = torch.clamp(output, min=epsilon, max=1-epsilon)
+    probs = torch.clamp(probs, epsilon, 1 - epsilon)
 
-    loss = -(target * torch.log(output) + (1 - target) * torch.log(1 - output))
-    loss *= wgt
-    return torch.mean(torch.sum(loss, dim=1))
-
+    losses = -(target * torch.log(probs) + (1 - target) * torch.log(1 - probs))
+    losses *= wgt
+    return torch.mean(torch.sum(losses, dim=1))
 
 def train(args, model, optimizer, scheduler=None, model_name='model'):
     writer = SummaryWriter()
@@ -44,56 +42,54 @@ def train(args, model, optimizer, scheduler=None, model_name='model'):
     # Ensure model is in correct mode and on right device
     model.train()
     model = model.to(args.device)
-    criterion = torch.nn.BCEWithLogitsLoss()
 
     cnt = 0
 
     for epoch in range(args.epochs):
-       for batch_idx, (data, target, wgt) in enumerate(train_loader):
-        data, target, wgt = data.to(args.device), target.to(args.device), wgt.to(args.device)
+        for batch_idx, (data, target, wgt) in enumerate(train_loader):
+            data, target, wgt = data.to(args.device), target.to(args.device), wgt.to(args.device)
 
-        optimizer.zero_grad()
-        output = model(data)
+            optimizer.zero_grad()
+            output = model(data)
 
-        ##################################################################
-        # TODO: Implement a suitable loss function for multi-label
-        # classification. You are NOT allowed to use any pytorch built-in
-        # functions. Remember to take care of underflows / overflows.
-        # Function Inputs:
-        #   - `output`: Outputs from the network
-        #   - `target`: Ground truth labels, refer to voc_dataset.py
-        #   - `wgt`: Weights (difficult or not), refer to voc_dataset.py
-        # Function Outputs:
-        #   - `output`: Computed loss, a single floating point number
-        ##################################################################
-        # loss = criterion(output, target)
-        loss = multi_label_loss(output, target, wgt)
-        ##################################################################
-        #                          END OF YOUR CODE                      #
-        ##################################################################
-        
-        loss.backward()
-        
-        if cnt % args.log_every == 0:
-            writer.add_scalar("Loss/train", loss.item(), cnt)
-            print('Train Epoch: {} [{} ({:.0f}%)]\tLoss: {:.6f}'.format(epoch, cnt, 100. * batch_idx / len(train_loader), loss.item()))
+            ##################################################################
+            # TODO: Implement a suitable loss function for multi-label
+            # classification. You are NOT allowed to use any pytorch built-in
+            # functions. Remember to take care of underflows / overflows.
+            # Function Inputs:
+            #   - `output`: Outputs from the network
+            #   - `target`: Ground truth labels, refer to voc_dataset.py
+            #   - `wgt`: Weights (difficult or not), refer to voc_dataset.py
+            # Function Outputs:
+            #   - `output`: Computed loss, a single floating point number
+            ##################################################################
+            loss = multi_label_loss(output, target, wgt)
+            ##################################################################
+            #                          END OF YOUR CODE                      #
+            ##################################################################
             
-            # Log gradients
-            for tag, value in model.named_parameters():
-                if value.grad is not None:
-                    writer.add_histogram(tag + "/grad", value.grad.cpu().numpy(), cnt)
+            loss.backward()
+            
+            if cnt % args.log_every == 0:
+                writer.add_scalar("Loss/train", loss.item(), cnt)
+                print('Train Epoch: {} [{} ({:.0f}%)]\tLoss: {:.6f}'.format(epoch, cnt, 100. * batch_idx / len(train_loader), loss.item()))
+                
+                # Log gradients
+                for tag, value in model.named_parameters():
+                    if value.grad is not None:
+                        writer.add_histogram(tag + "/grad", value.grad.cpu().numpy(), cnt)
 
-        optimizer.step()
-        
-        # Validation iteration
-        if cnt % args.val_every == 0:
-            model.eval()
-            ap, map = utils.eval_dataset_map(model, args.device, test_loader)
-            print("map: ", map)
-            writer.add_scalar("map", map, cnt)
-            model.train()
-        
-        cnt += 1
+            optimizer.step()
+            
+            # Validation iteration
+            if cnt % args.val_every == 0:
+                model.eval()
+                ap, map = utils.eval_dataset_map(model, args.device, test_loader)
+                print("map: ", map)
+                writer.add_scalar("map", map, cnt)
+                model.train()
+            
+            cnt += 1
 
         if scheduler is not None:
             scheduler.step()

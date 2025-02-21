@@ -17,7 +17,12 @@ class ResNet(nn.Module):
         ##################################################################
         # TODO: Define a FC layer here to process the features
         ##################################################################
+        for param in self.resnet.parameters():
+            param.requires_grad = False
+
         self.fc = nn.Linear(1000, num_classes)
+        for param in self.fc.parameters():
+            param.requires_grad = True
         ##################################################################
         #                          END OF YOUR CODE                      #
         ##################################################################
@@ -52,11 +57,11 @@ if __name__ == "__main__":
         inp_size=224,
         use_cuda=True,
         val_every=70,
-        lr= 0.005,
-        batch_size= 32,
-        step_size= 128,
-        gamma=0.9,
-        save_at_end=True
+        lr=0.0005,
+        batch_size=64,
+        step_size=2.5,
+        gamma=0.7,
+        save_at_end=True,
     )
     ##################################################################
     #                          END OF YOUR CODE                      #
@@ -71,12 +76,6 @@ if __name__ == "__main__":
     ##################################################################
 
     model = ResNet(len(VOCDataset.CLASS_NAMES)).to(args.device)
-
-    for param in model.resnet.parameters():
-        param.requires_grad = False
-
-    for param in model.fc.parameters():
-        param.requires_grad = True
 
     ##################################################################
     #                          END OF YOUR CODE                      #

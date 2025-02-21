@@ -23,11 +23,10 @@ if __name__ == "__main__":
         inp_size=64,
         use_cuda=True,
         val_every=70,
-        lr= 1e-3,
-        batch_size= 64,
-        step_size= 2.5,
-        gamma= 0.4,
-        save_at_end=False
+        lr=0.001,
+        batch_size=64,
+        step_size=2.5,
+        gamma=0.3
     )
     ##################################################################
     #                          END OF YOUR CODE                      #
