@@ -228,7 +228,7 @@ def fcos_make_centerness_targets(deltas: torch.Tensor):
 
     Returns:
         torch.Tensor
-            Tensor of shape `(N, )` giving centernxess regression targets.
+            Tensor of shape `(N, )` giving centerness regression targets.
     """
     ##########################################################################
     # TODO: Implement the centerness calculation logic.                      #
@@ -239,7 +239,8 @@ def fcos_make_centerness_targets(deltas: torch.Tensor):
     # )
     ##########################################################################
     centerness = None
-    left, top, right, bottom = torch.abs(deltas).unbind(dim=1)
+
+    left, top, right, bottom = deltas.unbind(dim=1)
     centerness = torch.sqrt(
         (torch.min(left, right) * torch.min(top, bottom))
         / (torch.max(left, right) * torch.max(top, bottom))
