@@ -355,7 +355,7 @@ class FCOS(nn.Module):
         # Feel free to delete this line: (but keep variable names same)
         locations_per_fpn_level = None
         shape_per_fpn_level = {key: value.shape for key, value in backbone_feats.items()}
-        locations_per_fpn_level = get_fpn_location_coords(shape_per_fpn_level, self.backbone.fpn_strides, dtype=images.dtype, device=images.device)
+        locations_per_fpn_level = get_fpn_location_coords(shape_per_fpn_level, self.backbone.fpn_strides, device=images.device)
         ######################################################################
         #                           END OF YOUR CODE                         #
         ######################################################################
@@ -423,9 +423,10 @@ class FCOS(nn.Module):
         # Feel free to delete this line: (but keep variable names same)
         loss_cls, loss_box, loss_ctr = None, None, None
 
-        gt_classes = F.one_hot(matched_gt_boxes[:, :, 4].to(torch.int64), num_classes=self.num_classes)
-        background = (matched_gt_boxes[:, :, 4] == -1)
+        background = matched_gt_boxes[:, :, 4] < 0
+        gt_classes = F.one_hot(matched_gt_boxes[:, :, 4].long().clamp(min=0, max=self.num_classes - 1), num_classes=self.num_classes)
         gt_classes[background] = 0
+        
 
         loss_cls = sigmoid_focal_loss(pred_cls_logits, gt_classes.float())
 
@@ -433,14 +434,14 @@ class FCOS(nn.Module):
         matched_gt_deltas = matched_gt_deltas.view(-1, 4)
 
         loss_box = 0.25 * F.l1_loss(pred_boxreg_deltas, matched_gt_deltas, reduction="none")
-        loss_box[(matched_gt_deltas == -1).all(dim=1)] = 0.0
+        loss_box[background.view(-1)] = 0.0
 
         pred_ctr_logits = pred_ctr_logits.view(-1)
 
-        matched_gt_centerness = fcos_make_centerness_targets(matched_gt_deltas)
+        matched_gt_centerness = fcos_make_centerness_targets(matched_gt_deltas).clamp(min=0, max=1)
 
         loss_ctr = F.binary_cross_entropy_with_logits(pred_ctr_logits, matched_gt_centerness, reduction="none")
-        loss_ctr[(matched_gt_deltas == -1).all(dim=1)] = 0.0
+        loss_ctr[background.view(-1)] = 0.0
         ######################################################################
         #                            END OF YOUR CODE                        #
         ######################################################################
@@ -543,16 +544,21 @@ class FCOS(nn.Module):
             keep = level_pred_scores > test_score_thresh
             level_pred_scores = level_pred_scores[keep]
             level_pred_classes = level_pred_classes[keep]
+            level_deltas = level_deltas[keep]
+            level_locations = level_locations[keep]
 
             # Step 3:
             # Replace "pass" statement with your code
             # Obtain predicted boxes using predicted deltas and locations.
-            level_pred_boxes = fcos_apply_deltas_to_locations(level_deltas[keep], level_locations[keep], self.backbone.fpn_strides[level_name])
+            level_pred_boxes = fcos_apply_deltas_to_locations(level_deltas, level_locations, self.backbone.fpn_strides[level_name])
 
             # Step 4: Use `images` to get (height, width) for clipping.
             # Replace "pass" statement with your code
             height, width = images.shape[2], images.shape[3]
-            level_pred_boxes = level_pred_boxes.clamp(min=0, max=torch.tensor([height, width]))
+            level_pred_boxes[:, 0].clamp_(min=0, max=width)
+            level_pred_boxes[:, 1].clamp_(min=0, max=height)
+            level_pred_boxes[:, 2].clamp_(min=0, max=width)
+            level_pred_boxes[:, 3].clamp_(min=0, max=height)
 
             ##################################################################
             #                          END OF YOUR CODE                      #
